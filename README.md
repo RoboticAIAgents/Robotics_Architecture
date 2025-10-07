@@ -57,7 +57,7 @@ Practicas langgrahp/
 - Python 3.8+
 - OpenAI API Key
 
-### Pasos de Instalación
+### Instalación Automática (Recomendada)
 
 1. **Clonar el repositorio**:
    ```bash
@@ -65,21 +65,33 @@ Practicas langgrahp/
    cd Practicas-langgrahp
    ```
 
-2. **Crear entorno virtual**:
+2. **Ejecutar script de configuración**:
+   ```bash
+   python setup.py
+   ```
+
+3. **Configurar API Key**:
+   - Editar el archivo `.env` generado
+   - Reemplazar `your_openai_api_key_here` con tu API key real
+
+### Instalación Manual
+
+1. **Crear entorno virtual**:
    ```bash
    python -m venv venv
    source venv/bin/activate  # En Windows: venv\Scripts\activate
    ```
 
-3. **Instalar dependencias**:
+2. **Instalar dependencias**:
    ```bash
-   pip install langgraph langchain-openai opencv-python python-dotenv
+   pip install -r requirements.txt
    ```
 
-4. **Configurar variables de entorno**:
+3. **Configurar variables de entorno**:
    ```bash
-   # Crear archivo .env
-   echo "OPENAI_API_KEY=tu_api_key_aqui" > .env
+   # Copiar archivo de ejemplo
+   cp config.example .env
+   # Editar .env con tu API key
    ```
 
 ## 🎯 Uso del Sistema
