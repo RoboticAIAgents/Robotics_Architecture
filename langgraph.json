@@ -1,0 +1,13 @@
+{
+  "dependencies": [
+    "langgraph",
+    "langchain-openai",
+    "pydantic"
+  ],
+  "graphs": {
+    "g":"./ejemplo1.py:g",
+    "g2":"./ejemplo2.py:g",
+    "g3":"./ejemplo3.py:g"
+  },
+  "env": ".env"
+}

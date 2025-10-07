@@ -1,0 +1,67 @@
+# Entorno virtual
+venv/
+env/
+.venv/
+
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Archivos de configuración local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Archivos de IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos temporales
+*.tmp
+*.temp
+*.log
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de LangGraph API
+.langgraph_api/
+
+# Archivos de mensajes temporales
+uav_to_ugv_message.json
+
+# Archivos de video y análisis (opcional - puedes remover estas líneas si quieres versionarlos)
+*.mp4
+*.png
+*.jpg
+*.jpeg
+
+# Archivos de backup
+*.bak
+*.backup
+*_copy.py
