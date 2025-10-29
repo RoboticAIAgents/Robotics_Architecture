@@ -1,10 +1,39 @@
+# Configuración del Sistema Multi-Agente UAV-UGV
+# Copia este archivo como .env y configura tus valores
+
 # OpenAI API Configuration
 OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o
+OPENAI_TEMPERATURE=0.1
 
-# Optional: LangSmith for tracing (if you want to use it)
-# LANGCHAIN_TRACING_V2=true
-# LANGCHAIN_API_KEY=your_langsmith_api_key_here
+# LangGraph Configuration
+LANGGRAPH_API_KEY=your_langgraph_api_key_here
 
-# Optional: Project configuration
-PROJECT_NAME=UAV-UGV-Rescue-System
-DEBUG_MODE=false
+# Video Processing Configuration
+VIDEO_PATH=uav_simulation.mp4
+FRAME_EXTRACTION_INTERVAL=30  # Extract frame every N seconds
+MAX_FRAMES_TO_ANALYZE=10      # Maximum number of frames to analyze
+
+# UAV Agent Configuration
+UAV_ANALYSIS_CONFIDENCE=0.7   # Minimum confidence for victim detection
+UAV_OBSTACLE_DETECTION=True   # Enable obstacle detection
+UAV_ROUTE_OPTIMIZATION=True   # Enable route optimization
+
+# UGV Agent Configuration
+UGV_COLLISION_DETECTION=True  # Enable collision detection
+UGV_SAFETY_DISTANCE=2.0      # Safety distance in meters
+UGV_RECALCULATION_THRESHOLD=0.5  # Distance threshold for route recalculation
+
+# Logging Configuration
+LOG_LEVEL=INFO               # DEBUG, INFO, WARNING, ERROR
+LOG_FILE=logs/system.log     # Log file path
+ENABLE_CONSOLE_LOGGING=True  # Enable console output
+
+# Communication Configuration
+MESSAGE_FILE=uav_to_ugv_message.json
+COMMUNICATION_TIMEOUT=30     # Timeout in seconds
+
+# Performance Configuration
+MAX_CONCURRENT_ANALYSES=3    # Maximum concurrent video analyses
+CACHE_ANALYSIS_RESULTS=True  # Cache analysis results
+CACHE_DURATION=3600          # Cache duration in seconds

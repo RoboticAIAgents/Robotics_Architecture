@@ -3,6 +3,7 @@ import json
 import time
 import socket
 import threading
+import math
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -21,8 +22,18 @@ class UGVState(dict):
     mission_status: str
     communication_log: list
     message_file: str  # Archivo del mensaje del UAV
+    # Nuevos campos para el controlador de movimiento
+    target_point: tuple  # Punto objetivo actual
+    route_index: int  # Índice del punto actual en la ruta
+    arrival_confirmed: bool  # Confirmación de llegada al punto
+    movement_speed: float  # Velocidad de movimiento (píxeles por comando)
+    # Campos de atención de víctimas
+    current_victim_info: dict  # Información de la víctima actual
+    attention_in_progress: bool  # Indica si hay atención en curso
+    attention_complete: bool  # Indica si la atención fue completada
+    victims_rescued: list  # Lista de víctimas rescatadas
 
-def messageReceiver(state: UGVState) -> UGVState:
+def receptorMensaje(state: UGVState) -> UGVState:
     """Lee el mensaje del UAV desde el archivo uav_to_ugv_message.json"""
     print("📡 UGV: Leyendo mensaje del UAV...")
     
@@ -291,7 +302,7 @@ def _extract_route_point(line):
         print(f"⚠️ UGV: Error al extraer punto de ruta: {e}")
         return None
 
-def missionPlanner(state: UGVState) -> UGVState:
+def planificadorMision(state: UGVState) -> UGVState:
     """Planifica la ejecución de la misión terrestre"""
     if not state.get("mission_received", False):
         return state
@@ -325,61 +336,292 @@ def missionPlanner(state: UGVState) -> UGVState:
     
     return state
 
-def missionExecutor(state: UGVState) -> UGVState:
-    """Ejecuta la misión terrestre"""
-    if state.get("mission_status") != "PLANNING_COMPLETE":
-        return state
+def ejecutorMision(state: UGVState) -> UGVState:
+    """Coordina la ejecución de la misión enviando puntos objetivo al controlador"""
+    # Inicializar variables si es la primera vez
+    if state.get("mission_status") == "PLANNING_COMPLETE":
+        print("🚀 UGV: Iniciando ejecución de misión con controlador de movimiento...")
+        state["route_index"] = 0
+        state["arrival_confirmed"] = False
+        state["movement_speed"] = 2.0  # píxeles por comando
+        state["mission_status"] = "READY_FOR_POINT"
     
-    print("🚀 UGV: Ejecutando misión terrestre...")
+    # Solo procesar si estamos listos para enviar un punto
+    if state.get("mission_status") != "READY_FOR_POINT":
+        return state
     
     # Obtener información de la ruta
     mission_data = state["mission_data"]
     route = mission_data.get("route", {})
     route_points = route.get("points", [])
     
-    if route_points:
-        print(f"🗺️ UGV: Siguiendo ruta optimizada...")
-        
-        # Simular seguimiento de ruta
-        for point in route_points:
-            coords = point.get("coordenadas", {})
-            x = coords.get("x", 0)
-            y = coords.get("y", 0)
-            tipo = point.get("tipo", "desconocido")
-            victima_id = point.get("victima_id", "")
-            
-            if tipo == "victima" and victima_id:
-                print(f"🎯 UGV: Rescatando víctima {victima_id} en ({x}, {y})")
-                time.sleep(1)  # Simular tiempo de rescate
-            else:
-                print(f"📍 UGV: Pasando por punto ({x}, {y}) - {tipo}")
-                time.sleep(0.5)  # Simular tiempo de navegación
-    else:
-        # Fallback: rescatar víctimas directamente
-        victims = state["target_victims"]
-        for i, victim in enumerate(victims, 1):
-            coords = victim.get("coordenadas", {})
-            x = coords.get("x", 0)
-            y = coords.get("y", 0)
-            estado = victim.get("estado", "desconocido")
-            
-            print(f"🎯 UGV: Rescatando víctima {i} en ({x}, {y}) - Estado: {estado}")
-            time.sleep(1)  # Simular tiempo de rescate
+    if not route_points:
+        print("⚠️ UGV: No hay puntos en la ruta")
+        state["mission_status"] = "MISSION_COMPLETE"
+        return state
     
-    state["mission_status"] = "MISSION_COMPLETE"
-    print(f"✅ UGV: Misión completada")
+    route_index = state.get("route_index", 0)
+    
+    # Verificar si hemos completado todos los puntos
+    if route_index >= len(route_points):
+        print(f"✅ UGV: Todos los puntos de la ruta completados")
+        state["mission_status"] = "MISSION_COMPLETE"
+        return state
+    
+    # Enviar siguiente punto objetivo
+    point = route_points[route_index]
+    coords = point.get("coordenadas", {})
+    target_x = coords.get("x", 0)
+    target_y = coords.get("y", 0)
+    tipo = point.get("tipo", "desconocido")
+    victima_id = point.get("victima_id", "")
+    
+    state["target_point"] = (target_x, target_y)
+    state["mission_status"] = "MOVING"
+    state["arrival_confirmed"] = False
+    
+    print(f"🎯 UGV Executor: Enviando punto {route_index + 1}/{len(route_points)}")
+    print(f"   └─ Objetivo: ({target_x}, {target_y}) - {tipo}")
+    if victima_id:
+        print(f"   └─ Víctima ID: {victima_id}")
     
     return state
 
-def should_continue(state: UGVState) -> str:
-    """Controla el flujo del UGV"""
-    if state.get("mission_status") == "MISSION_COMPLETE":
-        return "end"
+
+def controladorMovimiento(state: UGVState) -> UGVState:
+    """Controlador de movimiento que genera comandos (x,y) hacia el punto objetivo"""
+    if state.get("mission_status") != "MOVING":
+        return state
+    
+    current_pos = state.get("current_position", (10, 10))
+    target_point = state.get("target_point")
+    movement_speed = state.get("movement_speed", 2.0)
+    
+    if not target_point:
+        return state
+    
+    current_x, current_y = current_pos
+    target_x, target_y = target_point
+    
+    # Calcular distancia al objetivo
+    dx = target_x - current_x
+    dy = target_y - current_y
+    distance = math.sqrt(dx**2 + dy**2)
+    
+    # Verificar si hemos llegado al objetivo
+    if distance <= movement_speed:
+        # Llegamos al objetivo
+        state["current_position"] = target_point
+        state["arrival_confirmed"] = True
+        
+        print(f"✅ UGV Controller: Llegada confirmada a ({target_x}, {target_y})")
+        print(f"   └─ Distancia recorrida desde inicio: {distance:.1f} px")
+        
+        # Obtener información del punto alcanzado
+        route_index = state.get("route_index", 0)
+        mission_data = state["mission_data"]
+        route_points = mission_data.get("route", {}).get("points", [])
+        
+        if route_index < len(route_points):
+            point = route_points[route_index]
+            tipo = point.get("tipo", "desconocido")
+            victima_id = point.get("victima_id", "")
+            
+            # Si es una víctima, activar protocolo de atención
+            if tipo == "victima" and victima_id:
+                coords = point.get("coordenadas", {})
+                state["current_victim_info"] = {
+                    "id": victima_id,
+                    "coordinates": coords,
+                    "tipo": tipo
+                }
+                state["mission_status"] = "VICTIM_ATTENTION"
+                state["attention_in_progress"] = True
+                state["attention_complete"] = False
+                print(f"🚑 UGV: Víctima detectada - Activando protocolo de atención")
+            else:
+                # Para otros puntos, continuar directamente
+                if tipo == "inicio":
+                    print(f"🏁 UGV: Punto de inicio alcanzado")
+                else:
+                    print(f"📍 UGV: Punto intermedio alcanzado")
+                
+                time.sleep(0.5)  # Pausa breve
+                
+                # Avanzar al siguiente punto
+                state["route_index"] = route_index + 1
+                state["mission_status"] = "READY_FOR_POINT"
+                state["target_point"] = None
+        else:
+            # Sin más puntos
+            state["route_index"] = route_index + 1
+            state["mission_status"] = "READY_FOR_POINT"
+            state["target_point"] = None
+        
     else:
-        return "continue"
+        # Calcular siguiente posición (movimiento en línea recta)
+        # Normalizar vector de dirección
+        direction_x = dx / distance
+        direction_y = dy / distance
+        
+        # Calcular nueva posición
+        new_x = current_x + direction_x * movement_speed
+        new_y = current_y + direction_y * movement_speed
+        
+        # Actualizar posición
+        state["current_position"] = (int(new_x), int(new_y))
+        
+        # Mostrar comando de movimiento
+        print(f"🚗 UGV Controller: Moviendo a ({int(new_x)}, {int(new_y)}) | Distancia restante: {distance:.1f} px")
+        
+        time.sleep(0.1)  # Pequeña pausa para visualizar el movimiento
+    
+    return state
+
+
+def atencionVictimas(state: UGVState) -> UGVState:
+    """Protocolo de atención de víctimas - Ejecuta procedimientos de rescate"""
+    if state.get("mission_status") != "VICTIM_ATTENTION":
+        return state
+    
+    victim_info = state.get("current_victim_info", {})
+    victim_id = victim_info.get("id", "unknown")
+    coordinates = victim_info.get("coordinates", {})
+    x = coordinates.get("x", 0)
+    y = coordinates.get("y", 0)
+    
+    print(f"🚑 UGV: Iniciando protocolo de atención para víctima {victim_id}")
+    print(f"   └─ Ubicación: ({x}, {y})")
+    print(f"   └─ Evaluando estado de la víctima...")
+    time.sleep(1)
+    
+    # Simulación del protocolo de atención
+    print(f"   └─ Fase 1: Evaluación inicial completada")
+    time.sleep(0.5)
+    
+    print(f"   └─ Fase 2: Estabilización en proceso...")
+    time.sleep(1)
+    
+    print(f"   └─ Fase 3: Preparación para evacuación...")
+    time.sleep(1)
+    
+    print(f"   └─ Fase 4: Víctima asegurada")
+    time.sleep(0.5)
+    
+    # Registrar víctima rescatada
+    victims_rescued = state.get("victims_rescued", [])
+    victims_rescued.append({
+        "id": victim_id,
+        "coordinates": coordinates,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "status": "RESCUED"
+    })
+    state["victims_rescued"] = victims_rescued
+    
+    # Actualizar log de comunicación
+    communication_log = state.get("communication_log", [])
+    communication_log.append({
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "type": "VICTIM_RESCUED",
+        "victim_id": victim_id,
+        "coordinates": coordinates,
+        "status": "SUCCESS"
+    })
+    state["communication_log"] = communication_log
+    
+    # Marcar atención como completada
+    state["attention_complete"] = True
+    state["attention_in_progress"] = False
+    
+    print(f"✅ UGV: Protocolo de atención completado para víctima {victim_id}")
+    print(f"   └─ Total de víctimas rescatadas: {len(victims_rescued)}")
+    print(f"   └─ Enviando confirmación para continuar ruta...")
+    
+    # Avanzar al siguiente punto
+    state["route_index"] = state.get("route_index", 0) + 1
+    state["mission_status"] = "READY_FOR_POINT"
+    state["target_point"] = None
+    state["current_victim_info"] = {}
+    
+    time.sleep(0.5)  # Pausa antes de continuar
+    
+    return state
+
+
+def continuarEjecutor(state: UGVState) -> str:
+    """Controla si el ejecutor debe enviar más puntos o pasar al controlador"""
+    status = state.get("mission_status", "")
+    
+    if status == "MISSION_COMPLETE":
+        return "finalizar"
+    elif status == "MOVING":
+        return "mover"
+    elif status == "READY_FOR_POINT":
+        return "ejecutar"
+    else:
+        return "ejecutar"
+
+def continuarControlador(state: UGVState) -> str:
+    """Controla si el controlador debe seguir moviéndose, atender víctima o volver al ejecutor"""
+    status = state.get("mission_status", "")
+    
+    if status == "VICTIM_ATTENTION":
+        return "atender"
+    elif status == "READY_FOR_POINT":
+        return "ejecutar"
+    elif status == "MOVING":
+        return "mover"
+    else:
+        return "ejecutar"
+
+def create_ugv_graph():
+    """Crea y compila el grafo de trabajo del UGV"""
+    # Crear grafo UGV con controlador de movimiento y atención de víctimas
+    ugv_workflow = StateGraph(UGVState)
+    ugv_workflow.add_node("receptorMensaje", receptorMensaje)
+    ugv_workflow.add_node("planificadorMision", planificadorMision)
+    ugv_workflow.add_node("ejecutorMision", ejecutorMision)
+    ugv_workflow.add_node("controladorMovimiento", controladorMovimiento)
+    ugv_workflow.add_node("atencionVictimas", atencionVictimas)
+    
+    # Definir el flujo
+    ugv_workflow.set_entry_point("receptorMensaje")
+    ugv_workflow.add_edge("receptorMensaje", "planificadorMision")
+    ugv_workflow.add_edge("planificadorMision", "ejecutorMision")
+    
+    # Flujo entre ejecutor y controlador
+    ugv_workflow.add_conditional_edges(
+        "ejecutorMision",
+        continuarEjecutor,
+        {
+            "ejecutar": "ejecutorMision",       # Preparar siguiente punto
+            "mover": "controladorMovimiento",   # Pasar al controlador
+            "finalizar": END                     # Misión completada
+        }
+    )
+    
+    # Flujo del controlador: seguir moviéndose, atender víctima o volver al ejecutor
+    ugv_workflow.add_conditional_edges(
+        "controladorMovimiento",
+        continuarControlador,
+        {
+            "mover": "controladorMovimiento",  # Seguir moviéndose
+            "atender": "atencionVictimas",      # Atender víctima detectada
+            "ejecutar": "ejecutorMision"        # Punto alcanzado, volver al ejecutor
+        }
+    )
+    
+    # Flujo de atención de víctimas: después de atender, volver al ejecutor
+    ugv_workflow.add_edge("atencionVictimas", "ejecutorMision")
+    
+    # Compilar y retornar
+    return ugv_workflow.compile()
+
+# Variable global para el grafo compilado (para langgraph.json)
+g = create_ugv_graph()
 
 def main():
-    print("🚗 SISTEMA UGV - LECTURA DE MENSAJES SIMPLIFICADOS DEL UAV")
+    print("🚗 SISTEMA UGV - CON CONTROLADOR DE MOVIMIENTO Y ATENCIÓN DE VÍCTIMAS")
     print("=" * 60)
     
     # Estado inicial
@@ -391,34 +633,31 @@ def main():
         "obstacles_avoided": [],
         "mission_status": "WAITING",
         "communication_log": [],
-        "message_file": "uav_to_ugv_message.json"
+        "message_file": "uav_to_ugv_message.json",
+        # Campos del controlador
+        "target_point": None,
+        "route_index": 0,
+        "arrival_confirmed": False,
+        "movement_speed": 2.0,
+        # Campos de atención de víctimas
+        "current_victim_info": {},
+        "attention_in_progress": False,
+        "attention_complete": False,
+        "victims_rescued": []
     }
     
-    # Crear grafo UGV
-    ugv_workflow = StateGraph(UGVState)
-    ugv_workflow.add_node("messageReceiver", messageReceiver)
-    ugv_workflow.add_node("missionPlanner", missionPlanner)
-    ugv_workflow.add_node("missionExecutor", missionExecutor)
-    
-    ugv_workflow.set_entry_point("messageReceiver")
-    ugv_workflow.add_edge("messageReceiver", "missionPlanner")
-    ugv_workflow.add_edge("missionPlanner", "missionExecutor")
-    ugv_workflow.add_conditional_edges(
-        "missionExecutor",
-        should_continue,
-        {
-            "continue": "messageReceiver",
-            "end": END
-        }
-    )
-    
-    # Compilar y ejecutar UGV
-    ugv_app = ugv_workflow.compile()
+    # Usar el grafo global compilado
+    ugv_app = g
     
     try:
-        ugv_app.invoke(initial_state, config={"recursion_limit": 20})
+        print("🎯 Flujo de trabajo:")
+        print("   messageReceiver → missionPlanner → missionExecutor ⇄ movementController")
+        print("=" * 60)
+        ugv_app.invoke(initial_state, config={"recursion_limit": 10000})
     except Exception as e:
         print(f"❌ Error en UGV: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         print("🔚 UGV Agent terminado")
 

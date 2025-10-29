@@ -3,6 +3,7 @@ import cv2
 import base64
 import json
 import time
+import math
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -26,8 +27,127 @@ class State(dict):
     routes_planned: list  # Lista de rutas planificadas
     mission_brief: str  # Mensaje de misión para el agente terrestre
     communication_log: list  # Log de comunicaciones
+    # Campos del controlador de movimiento
+    uav_position: tuple  # Posición actual del UAV (x, y)
+    patrol_route: list  # Ruta de patrullaje circular
+    patrol_index: int  # Índice actual en la ruta de patrullaje
+    patrol_complete: bool  # Indica si completó el patrullaje
+    movement_speed: float  # Velocidad de movimiento (píxeles por comando)
 
-def videoProcessor(state: State) -> State:
+def inicializadorPatrullaje(state: State) -> State:
+    """Inicializa la ruta de patrullaje circular del UAV"""
+    print("🛸 UAV: Inicializando sistema de patrullaje...")
+    
+    # Obtener dimensiones del área (del primer frame o usar valores por defecto)
+    cap = state["video_cap"]
+    ret, frame = cap.read()
+    if ret:
+        height, width = frame.shape[:2]
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Volver al inicio
+    else:
+        width, height = 640, 480  # Valores por defecto
+    
+    # Generar ruta circular que cubre toda la zona
+    patrol_route = _generate_circular_patrol_route(width, height, start_pos=(10, 10))
+    
+    state["uav_position"] = (10, 10)
+    state["patrol_route"] = patrol_route
+    state["patrol_index"] = 0
+    state["patrol_complete"] = False
+    state["movement_speed"] = 3.0  # píxeles por comando
+    
+    print(f"🗺️ UAV: Ruta de patrullaje generada")
+    print(f"   └─ Área de cobertura: {width}x{height} píxeles")
+    print(f"   └─ Puntos de patrullaje: {len(patrol_route)}")
+    print(f"   └─ Posición inicial: (10, 10)")
+    print(f"   └─ Velocidad: {state['movement_speed']} px/cmd")
+    
+    return state
+
+def _generate_circular_patrol_route(width: int, height: int, start_pos: tuple) -> list:
+    """Genera una ruta circular que cubre el perímetro de la zona"""
+    route = []
+    
+    # Definir puntos del perímetro en sentido horario
+    margin = 20  # Margen desde los bordes
+    
+    # Esquina superior izquierda (inicio)
+    route.append((margin, margin))
+    
+    # Lado superior (izquierda a derecha)
+    for x in range(margin, width - margin, 50):
+        route.append((x, margin))
+    route.append((width - margin, margin))  # Esquina superior derecha
+    
+    # Lado derecho (arriba a abajo)
+    for y in range(margin, height - margin, 50):
+        route.append((width - margin, y))
+    route.append((width - margin, height - margin))  # Esquina inferior derecha
+    
+    # Lado inferior (derecha a izquierda)
+    for x in range(width - margin, margin, -50):
+        route.append((x, height - margin))
+    route.append((margin, height - margin))  # Esquina inferior izquierda
+    
+    # Lado izquierdo (abajo a arriba)
+    for y in range(height - margin, margin, -50):
+        route.append((margin, y))
+    
+    # Volver al punto de inicio
+    route.append(start_pos)
+    
+    return route
+
+def controladorPatrullaje(state: State) -> State:
+    """Controlador de movimiento que ejecuta el patrullaje circular"""
+    if state.get("patrol_complete", False):
+        return state
+    
+    current_pos = state.get("uav_position", (10, 10))
+    patrol_route = state.get("patrol_route", [])
+    patrol_index = state.get("patrol_index", 0)
+    movement_speed = state.get("movement_speed", 3.0)
+    
+    if patrol_index >= len(patrol_route):
+        # Patrullaje completado
+        state["patrol_complete"] = True
+        print(f"✅ UAV: Patrullaje completado - Retornado a posición inicial")
+        print(f"=" * 60)
+        return state
+    
+    # Obtener siguiente punto objetivo
+    target_point = patrol_route[patrol_index]
+    current_x, current_y = current_pos
+    target_x, target_y = target_point
+    
+    # Calcular distancia al objetivo
+    dx = target_x - current_x
+    dy = target_y - current_y
+    distance = math.sqrt(dx**2 + dy**2)
+    
+    # Verificar si hemos llegado al punto
+    if distance <= movement_speed:
+        # Llegamos al punto
+        state["uav_position"] = target_point
+        state["patrol_index"] = patrol_index + 1
+        print(f"📍 UAV: Punto {patrol_index + 1}/{len(patrol_route)} alcanzado - ({target_x}, {target_y})")
+    else:
+        # Calcular siguiente posición (movimiento en línea recta)
+        direction_x = dx / distance
+        direction_y = dy / distance
+        
+        new_x = current_x + direction_x * movement_speed
+        new_y = current_y + direction_y * movement_speed
+        
+        state["uav_position"] = (int(new_x), int(new_y))
+        
+        # Mostrar comando de movimiento (menos frecuente para no saturar)
+        if patrol_index % 2 == 0:  # Mostrar cada 2 puntos
+            print(f"✈️ UAV: Patrullando hacia punto {patrol_index + 1}/{len(patrol_route)} - Posición: ({int(new_x)}, {int(new_y)})")
+    
+    return state
+
+def procesadorVideo(state: State) -> State:
     """Obtiene el siguiente frame del video"""
     cap = state["video_cap"]
     current_frame = state["current_frame"]
@@ -54,7 +174,7 @@ def videoProcessor(state: State) -> State:
     
     return state
 
-def victimsIdentification(state: State) -> State:
+def identificacionVictimas(state: State) -> State:
     """Analiza el frame para identificar víctimas específicamente"""
     frame_base64 = state["frame_base64"]
     current_frame = state["current_frame"]
@@ -160,7 +280,7 @@ def victimsIdentification(state: State) -> State:
     
     return state
 
-def obstaclesIdentification(state: State) -> State:
+def identificacionObstaculos(state: State) -> State:
     """Analiza el frame para identificar obstáculos específicamente"""
     frame_base64 = state["frame_base64"]
     current_frame = state["current_frame"]
@@ -264,7 +384,7 @@ def obstaclesIdentification(state: State) -> State:
     
     return state
 
-def routePlanning(state: State) -> State:
+def planificacionRuta(state: State) -> State:
     """Planifica UNA ruta óptima desde (10,10) que pase por TODAS las víctimas evitando obstáculos"""
     current_frame = state["current_frame"]
     
@@ -419,7 +539,7 @@ def routePlanning(state: State) -> State:
     
     return state
 
-def missionBriefing(state: State) -> State:
+def briefingMision(state: State) -> State:
     """Recopila toda la información y genera un mensaje de misión para el agente terrestre"""
     current_frame = state["current_frame"]
     
@@ -530,7 +650,7 @@ def missionBriefing(state: State) -> State:
     
     return state
 
-def messageLoader(state: State) -> State:
+def cargadorMensaje(state: State) -> State:
     """Carga el mensaje del mission briefing en el archivo uav_to_ugv_message.json"""
     current_frame = state["current_frame"]
     
@@ -726,16 +846,72 @@ def encode_frame_to_base64(frame, frame_number):
     
     return frame_base64
 
+def create_uav_graph():
+    """Crea y compila el grafo de trabajo del UAV"""
+    # Crear grafo
+    workflow = StateGraph(State)
+    
+    # Agregar nodos
+    workflow.add_node("inicializadorPatrullaje", inicializadorPatrullaje)
+    workflow.add_node("controladorPatrullaje", controladorPatrullaje)
+    workflow.add_node("procesadorVideo", procesadorVideo)
+    workflow.add_node("identificacionVictimas", identificacionVictimas)
+    workflow.add_node("identificacionObstaculos", identificacionObstaculos)
+    workflow.add_node("planificacionRuta", planificacionRuta)
+    workflow.add_node("briefingMision", briefingMision)
+    workflow.add_node("cargadorMensaje", cargadorMensaje)
+
+    # Definir flujo: patrullaje primero, luego procesamiento de frames
+    workflow.set_entry_point("inicializadorPatrullaje")
+    workflow.add_edge("inicializadorPatrullaje", "controladorPatrullaje")
+    
+    # Control de patrullaje: seguir patrullando o iniciar procesamiento
+    workflow.add_conditional_edges(
+        "controladorPatrullaje",
+        lambda state: "patrullaje" if not state.get("patrol_complete", False) else "procesar",
+        {
+            "patrullaje": "controladorPatrullaje",  # Seguir patrullando
+            "procesar": "procesadorVideo"            # Iniciar procesamiento de frames
+        }
+    )
+    
+    # Flujo de procesamiento de frames
+    workflow.add_edge("procesadorVideo", "identificacionVictimas")
+    workflow.add_edge("identificacionVictimas", "identificacionObstaculos")
+    workflow.add_edge("identificacionObstaculos", "planificacionRuta")
+    workflow.add_edge("planificacionRuta", "briefingMision")
+    workflow.add_edge("briefingMision", "cargadorMensaje")
+    
+    # Control de continuación: procesar más frames o finalizar
+    workflow.add_conditional_edges(
+        "cargadorMensaje",
+        should_continue,
+        {
+            "continue": "procesadorVideo",
+            "end": END
+        }
+    )
+    
+    # Compilar y retornar
+    return workflow.compile()
+
+# Variable global para el grafo compilado (para langgraph.json)
+g = create_uav_graph()
+
 def main():
-    print(" SISTEMA DE IDENTIFICACIÓN, PLANIFICACIÓN Y COMUNICACIÓN UAV CON LANGGRAPH")
+    print("🛸 SISTEMA UAV CON PATRULLAJE CIRCULAR Y ANÁLISIS DE VIDEO")
     print("=" * 80)
     
     # Configuración
     video_path = "uav_simulation.mp4"
     max_frames = 1  # Cambiar aquí para procesar más frames
     
-    print(f"🎬 Iniciando procesamiento del video: {video_path}")
-    print(f"👥 Procesando máximo {max_frames} frames para identificar víctimas, obstáculos, planificar ruta y generar briefing")
+    print(f"🎬 Iniciando sistema UAV: {video_path}")
+    print(f"📋 Flujo de trabajo:")
+    print(f"   1. Patrullaje circular del área (perímetro completo)")
+    print(f"   2. Procesamiento de {max_frames} frame(s)")
+    print(f"   3. Identificación de víctimas y obstáculos")
+    print(f"   4. Planificación de ruta y generación de briefing")
     print("=" * 80)
     
     # Abrir video
@@ -763,43 +939,22 @@ def main():
         "obstacles_found": [],
         "routes_planned": [],
         "mission_brief": "",
-        "communication_log": []  # NUEVO CAMPO
+        "communication_log": [],  # Log de comunicaciones
+        # Campos del controlador de movimiento
+        "uav_position": (10, 10),
+        "patrol_route": [],
+        "patrol_index": 0,
+        "patrol_complete": False,
+        "movement_speed": 3.0
     }
     
-    # Crear grafo
-    workflow = StateGraph(State)
-    
-    # Agregar nodos
-    workflow.add_node("videoProcessor", videoProcessor)
-    workflow.add_node("victimsIdentification", victimsIdentification)
-    workflow.add_node("obstaclesIdentification", obstaclesIdentification)
-    workflow.add_node("routePlanning", routePlanning)
-    workflow.add_node("missionBriefing", missionBriefing)
-    workflow.add_node("messageLoader", messageLoader)  # NUEVO NODO
-
-    # Definir flujo: videoProcessor -> victimsIdentification -> obstaclesIdentification -> routePlanning -> missionBriefing -> (continue/end)
-    workflow.set_entry_point("videoProcessor")
-    workflow.add_edge("videoProcessor", "victimsIdentification")
-    workflow.add_edge("victimsIdentification", "obstaclesIdentification")
-    workflow.add_edge("obstaclesIdentification", "routePlanning")
-    workflow.add_edge("routePlanning", "missionBriefing")
-    workflow.add_edge("missionBriefing", "messageLoader")  # NUEVA CONEXIÓN
-    workflow.add_conditional_edges(
-        "messageLoader",  # CAMBIAR DE routePlanning A messageLoader
-        should_continue,
-        {
-            "continue": "videoProcessor",
-            "end": END
-        }
-    )
-    
-    # Compilar y ejecutar
-    app = workflow.compile()
+    # Usar el grafo global compilado
+    app = g
     
     try:
         result = app.invoke(
             initial_state,
-            config={"recursion_limit": 20}  # Aumentar límite de recursión
+            config={"recursion_limit": 1000}  # Aumentar límite para patrullaje + procesamiento
         )
         
     except Exception as e:

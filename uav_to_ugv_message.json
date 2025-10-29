@@ -1,0 +1,9 @@
+{
+  "timestamp": "2025-10-28 22:28:31",
+  "from": "UAV",
+  "to": "UGV",
+  "message_type": "MISSION_BRIEFING",
+  "mission_brief": "\nMISSION BRIEFING - RESCATE TERRESTRE\n===================================\nID: MISSION_1761712111\nTimestamp: 2025-10-28 22:28:31\nPriority: ALTA\n\nZONE ANALYSIS\n=============\nMap Resolution: 640x480\nVictims: 5\nObstacles: 11\n\n👥 VÍCTIMAS A RESCATAR\n=====================\nVictim 1: Position=(40, 440), State=crítico, Priority=alta\nVictim 2: Position=(270, 100), State=herido, Priority=media\nVictim 3: Position=(325, 100), State=herido, Priority=media\nVictim 4: Position=(540, 195), State=seguro, Priority=baja\nVictim 5: Position=(585, 215), State=seguro, Priority=baja\n\n🚧 OBSTÁCULOS IDENTIFICADOS\n=========================\nObstacle 1: Position=(60, 200), Type=edificio, Risk=ALTO\nObstacle 2: Position=(150, 90), Type=edificio, Risk=ALTO\nObstacle 3: Position=(250, 150), Type=edificio, Risk=ALTO\nObstacle 4: Position=(360, 170), Type=edificio, Risk=ALTO\nObstacle 5: Position=(320, 300), Type=edificio, Risk=ALTO\nObstacle 6: Position=(440, 320), Type=edificio, Risk=ALTO\nObstacle 7: Position=(580, 40), Type=vehículo, Risk=MEDIO\nObstacle 8: Position=(320, 235), Type=vehículo, Risk=MEDIO\nObstacle 9: Position=(120, 320), Type=vehículo, Risk=MEDIO\nObstacle 10: Position=(190, 300), Type=vehículo, Risk=MEDIO\nObstacle 11: Position=(510, 320), Type=escombro, Risk=ALTO\n\nOPTIMIZED ROUTE\n===============\nDistance: 1185.94m\nTime: 39.53s\nVictims to visit: 5\nVisit order: [1, 2, 3, 4, 5]\n\nPuntos de ruta:\n  1. (10, 10) - inicio\n  2. (40, 440) - victima (ID: 1)\n  3. (146, 338) - punto_paso\n  4. (270, 100) - victima (ID: 2)\n  5. (325, 100) - victima (ID: 3)\n  6. (430, 145) - punto_paso\n  7. (540, 195) - victima (ID: 4)\n  8. (585, 215) - victima (ID: 5)\n",
+  "status": "READY_FOR_UGV",
+  "message_id": "MSG_1761712111"
+}

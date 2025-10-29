@@ -1,6 +1,10 @@
 # Sistema Multi-Agente UAV-UGV para Operaciones de Rescate
 
-Este proyecto implementa un sistema multi-agente utilizando LangGraph para operaciones de rescate coordinadas entre un UAV (vehículo aéreo no tripulado) y un UGV (vehículo terrestre no tripulado).
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.6.0+-green.svg)](https://python.langchain.com/docs/langgraph)
+
+Este proyecto implementa un sistema multi-agente utilizando LangGraph para operaciones de rescate coordinadas entre un UAV (vehículo aéreo no tripulado) y un UGV (vehículo terrestre no tripulado). Desarrollado como parte de la [Arquitectura Robótica](https://github.com/RoboticAIAgents/Robotics_Architecture) de RoboticAIAgents.
 
 ## 🚁 Componentes del Sistema
 
@@ -37,10 +41,9 @@ Este proyecto implementa un sistema multi-agente utilizando LangGraph para opera
 ## 📁 Estructura del Proyecto
 
 ```
-Practicas langgrahp/
+MultiAgent/
 ├── UAV_agent.py              # Agente aéreo principal
 ├── UGV_Agent.py              # Agente terrestre con detección de colisiones
-├── multi_agent_system.py     # Sistema coordinado UAV-UGV
 ├── video_sim.py              # Simulador de video
 ├── uav_to_ugv_message.json   # Archivo de comunicación entre agentes
 ├── uav_simulation.mp4        # Video de simulación
@@ -48,7 +51,12 @@ Practicas langgrahp/
 ├── venv/                     # Entorno virtual Python
 ├── .langgraph_api/           # Configuración de LangGraph API
 ├── langgraph.json            # Configuración del proyecto
-└── README.md                 # Este archivo
+├── requirements.txt          # Dependencias del proyecto
+├── setup.py                  # Script de configuración automática
+├── config.example            # Archivo de configuración de ejemplo
+├── .gitignore               # Archivos ignorados por Git
+├── LICENSE                  # Licencia MIT
+└── README.md                # Este archivo
 ```
 
 ## 🚀 Instalación y Configuración
@@ -61,8 +69,8 @@ Practicas langgrahp/
 
 1. **Clonar el repositorio**:
    ```bash
-   git clone <url-del-repositorio>
-   cd Practicas-langgrahp
+   git clone https://github.com/RoboticAIAgents/Robotics_Architecture.git
+   cd Robotics_Architecture/MultiAgent
    ```
 
 2. **Ejecutar script de configuración**:
@@ -140,11 +148,23 @@ El sistema registra:
 
 ## 🤝 Contribuciones
 
-Este proyecto forma parte de un PFG (Proyecto Final de Grado) enfocado en sistemas multi-agente para operaciones de rescate.
+Este proyecto forma parte de la [Arquitectura Robótica](https://github.com/RoboticAIAgents/Robotics_Architecture) de RoboticAIAgents y está abierto a contribuciones de la comunidad. 
+
+### Cómo Contribuir
+
+1. Fork el repositorio
+2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+### Reportar Issues
+
+Si encuentras algún problema o tienes una sugerencia, por favor abre un [issue](https://github.com/RoboticAIAgents/Robotics_Architecture/issues) en el repositorio.
 
 ## 📝 Licencia
 
-Proyecto académico - Uso educativo y de investigación.
+Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
 
 ## 🔗 Referencias
 
